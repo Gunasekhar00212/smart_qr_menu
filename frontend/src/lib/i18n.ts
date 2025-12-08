@@ -1,0 +1,156 @@
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+
+const resources = {
+  en: {
+    translation: {
+      common: {
+        welcome: 'Welcome',
+        login: 'Login',
+        signup: 'Sign Up',
+        logout: 'Logout',
+        dashboard: 'Dashboard',
+        menu: 'Menu',
+        orders: 'Orders',
+        tables: 'Tables',
+        settings: 'Settings',
+        save: 'Save',
+        cancel: 'Cancel',
+        delete: 'Delete',
+        edit: 'Edit',
+        add: 'Add',
+        search: 'Search',
+        filter: 'Filter',
+        loading: 'Loading...',
+        error: 'Error',
+        success: 'Success',
+      },
+      landing: {
+        hero: 'Transform Your Restaurant Experience',
+        heroSubtitle: 'Smart QR menus, AI-powered ordering, and real-time management - all in one platform',
+        getStarted: 'Get Started Free',
+        viewDemo: 'View Demo',
+        features: 'Features',
+        pricing: 'Pricing',
+        contact: 'Contact',
+      },
+      menu: {
+        categories: 'Categories',
+        allItems: 'All Items',
+        veg: 'Vegetarian',
+        nonVeg: 'Non-Vegetarian',
+        spicy: 'Spicy',
+        popular: 'Popular',
+        outOfStock: 'Out of Stock',
+        addToCart: 'Add to Cart',
+        customize: 'Customize',
+      },
+      cart: {
+        title: 'Your Cart',
+        empty: 'Your cart is empty',
+        subtotal: 'Subtotal',
+        tax: 'Tax',
+        total: 'Total',
+        checkout: 'Checkout',
+        placeOrder: 'Place Order',
+      },
+      orders: {
+        pending: 'Pending',
+        preparing: 'Preparing',
+        ready: 'Ready',
+        served: 'Served',
+        cancelled: 'Cancelled',
+      },
+      assistant: {
+        greeting: 'Hi! I\'m your AI menu assistant. How can I help you today?',
+        preferences: 'What are your food preferences?',
+        suggestions: 'Based on your preferences, I recommend...',
+      },
+    },
+  },
+  es: {
+    translation: {
+      common: {
+        welcome: 'Bienvenido',
+        login: 'Iniciar Sesión',
+        signup: 'Registrarse',
+        logout: 'Cerrar Sesión',
+        dashboard: 'Panel',
+        menu: 'Menú',
+        orders: 'Pedidos',
+        tables: 'Mesas',
+        settings: 'Configuración',
+        save: 'Guardar',
+        cancel: 'Cancelar',
+        delete: 'Eliminar',
+        edit: 'Editar',
+        add: 'Agregar',
+        search: 'Buscar',
+        filter: 'Filtrar',
+        loading: 'Cargando...',
+        error: 'Error',
+        success: 'Éxito',
+      },
+      landing: {
+        hero: 'Transforma la Experiencia de tu Restaurante',
+        heroSubtitle: 'Menús QR inteligentes, pedidos con IA y gestión en tiempo real',
+        getStarted: 'Comenzar Gratis',
+        viewDemo: 'Ver Demo',
+      },
+      menu: {
+        categories: 'Categorías',
+        allItems: 'Todos los Artículos',
+        veg: 'Vegetariano',
+        nonVeg: 'No Vegetariano',
+        spicy: 'Picante',
+        popular: 'Popular',
+        outOfStock: 'Agotado',
+        addToCart: 'Agregar al Carrito',
+      },
+      cart: {
+        title: 'Tu Carrito',
+        empty: 'Tu carrito está vacío',
+        subtotal: 'Subtotal',
+        tax: 'Impuesto',
+        total: 'Total',
+        checkout: 'Finalizar Compra',
+        placeOrder: 'Realizar Pedido',
+      },
+    },
+  },
+  hi: {
+    translation: {
+      common: {
+        welcome: 'स्वागत है',
+        login: 'लॉगिन',
+        signup: 'साइन अप',
+        logout: 'लॉगआउट',
+        dashboard: 'डैशबोर्ड',
+        menu: 'मेनू',
+        orders: 'ऑर्डर',
+        tables: 'टेबल',
+      },
+      landing: {
+        hero: 'अपने रेस्टोरेंट अनुभव को बदलें',
+        heroSubtitle: 'स्मार्ट QR मेनू, AI-संचालित ऑर्डरिंग',
+        getStarted: 'मुफ्त शुरू करें',
+      },
+      menu: {
+        veg: 'शाकाहारी',
+        nonVeg: 'मांसाहारी',
+        addToCart: 'कार्ट में जोड़ें',
+      },
+    },
+  },
+};
+
+i18n.use(initReactI18next).init({
+  resources,
+  lng: 'en',
+  fallbackLng: 'en',
+  interpolation: {
+    escapeValue: false,
+  },
+});
+
+export default i18n;
