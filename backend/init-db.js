@@ -273,6 +273,23 @@ async function initDatabase() {
     `);
     console.log('✅ Created table: popular_item_cache');
 
+    // 17. Create service_requests table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS service_requests (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+        table_id UUID REFERENCES tables(id) ON DELETE SET NULL,
+        request_type TEXT NOT NULL,
+        status TEXT DEFAULT 'PENDING',
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        resolved_at TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_service_requests_restaurant 
+        ON service_requests(restaurant_id, status, created_at DESC);
+    `);
+    console.log('✅ Created table: service_requests');
+
     // Insert default restaurant if none exists
     const restaurantCheck = await client.query('SELECT COUNT(*) FROM restaurants');
     if (parseInt(restaurantCheck.rows[0].count) === 0) {
@@ -284,7 +301,7 @@ async function initDatabase() {
     }
 
     console.log('\n🎉 Database initialization completed successfully!');
-    console.log('📊 Created 17 tables matching the Prisma schema\n');
+    console.log('📊 Created 18 tables matching the application schema\n');
     
   } catch (error) {
     console.error('❌ Error initializing database:', error);
