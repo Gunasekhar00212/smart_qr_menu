@@ -13,13 +13,26 @@ import {
   XCircle,
   MoreVertical,
   AlertCircle,
+  RefreshCw,
+  Trash2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-
-const API_BASE_URL = 'http://localhost:5000/api';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { getApiUrl } from '@/lib/apiClient';
 
 interface Order {
   id: string;
+  orderNumber: string;
   table: string | number;
   items: { name: string; quantity: number; price: number }[];
   status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'served' | 'completed' | 'cancelled';
@@ -42,20 +55,26 @@ export default function OrdersPage() {
   const [activeTab, setActiveTab] = useState('all');
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     fetchOrders();
+    // Poll for new orders every 5 seconds for real-time updates
+    const interval = setInterval(() => fetchOrders(true), 5000);
+    return () => clearInterval(interval);
   }, []);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (silent = false) => {
     try {
-      setIsLoading(true);
+      if (!silent) setIsLoading(true);
+      setIsRefreshing(true);
       
       // Get restaurantId - hardcoded for now
       const restaurantId = 'fd64a3b7-4c88-4a5d-b53f-a18ef35bcfe4';
       
-      const response = await fetch(`${API_BASE_URL}/orders?restaurantId=${restaurantId}`);
+      const response = await fetch(getApiUrl(`/api/orders?restaurantId=${restaurantId}`));
       if (!response.ok) throw new Error('Failed to fetch orders');
       const data = await response.json();
       
@@ -68,10 +87,11 @@ export default function OrdersPage() {
       }
       
       // Transform backend data to frontend format
-      const transformedOrders = data.map((order: any) => {
+      const transformedOrders = data.map((order: any, index: number) => {
         try {
           return {
             id: order.id || 'unknown',
+            orderNumber: `ORD ${data.length - index}`,
             table: order.tableNumber || order.tableLabel || 'No Table',
             items: (order.items || [])
               .filter((item: any) => item && item.id)
@@ -103,6 +123,7 @@ export default function OrdersPage() {
       setOrders([]);
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -119,25 +140,36 @@ export default function OrdersPage() {
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/orders/${orderId}/status`, {
+      const response = await fetch(getApiUrl(`/api/orders/${orderId}/status`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ status: newStatus.toUpperCase() }),
       });
       
       if (!response.ok) throw new Error('Failed to update order status');
       
+      const updatedOrder = await response.json();
+      
+      // Update the order in the local state without refreshing the whole page
+      setOrders(prevOrders => 
+        prevOrders.map(order => 
+          order.id === orderId 
+            ? { ...order, status: newStatus as any }
+            : order
+        )
+      );
+      
       toast({
-        title: 'Success',
-        description: `Order updated to ${newStatus}`,
+        title: '✅ Order Updated',
+        description: `Order status changed to ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`,
       });
       
-      fetchOrders(); // Refresh orders
+      // Don't refresh the entire page - just update the local state above
     } catch (error) {
       console.error('Error updating order:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to update order status',
+        title: '❌ Error',
+        description: 'Failed to update order status. Please try again.',
         variant: 'destructive',
       });
     }
@@ -148,6 +180,37 @@ export default function OrdersPage() {
     return orders.filter((order) => order.status === status);
   };
 
+  const handleClearTodayData = async () => {
+    try {
+      setIsClearing(true);
+      const restaurantId = 'fd64a3b7-4c88-4a5d-b53f-a18ef35bcfe4';
+      const response = await fetch(getApiUrl(`/api/orders/clear-today?restaurantId=${restaurantId}`), {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        toast({
+          title: 'Orders Cleared',
+          description: `Successfully cleared ${data.deletedCount || 0} orders`,
+        });
+        // Use silent refresh to avoid showing loading spinner
+        await fetchOrders(true);
+      } else {
+        throw new Error('Failed to clear data');
+      }
+    } catch (error) {
+      console.error('Error clearing today\'s data:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to clear today\'s data',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
   const OrderCard = ({ order }: { order: Order }) => {
     const config = statusConfig[order.status];
     const Icon = config.icon;
@@ -155,22 +218,22 @@ export default function OrdersPage() {
     return (
       <motion.div
         layout
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
         className="p-4 rounded-xl border border-border bg-card hover:border-primary/50 transition-all"
       >
         <div className="flex items-start justify-between mb-4">
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-bold">{order.id}</h3>
+              <h3 className="font-bold">
+                {order.items.length > 0 ? order.items[0].name : 'Order'} 
+                {order.items.length > 1 && ` +${order.items.length - 1} more`}
+              </h3>
               <Badge className={config.color}>
                 <Icon className="w-3 h-3 mr-1" />
                 {config.label}
               </Badge>
             </div>
             <p className="text-sm text-muted-foreground mt-1">
-              Table {order.table} • {order.createdAt}
+              {order.orderNumber} • Table {order.table} • {order.createdAt}
             </p>
           </div>
           <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -196,48 +259,32 @@ export default function OrdersPage() {
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-3 border-t border-border">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border">
           <span className="text-lg font-bold">₹{order.total.toFixed(2)}</span>
           <div className="flex gap-2">
-            {order.status === 'pending' && (
+            {(order.status === 'cancelled' || order.status === 'completed') ? (
+              <span className="text-sm text-muted-foreground">Order {order.status}</span>
+            ) : (
               <>
                 <Button 
                   variant="outline" 
                   size="sm"
                   onClick={() => updateOrderStatus(order.id, 'cancelled')}
+                  className="flex-1 sm:flex-none"
                 >
-                  <XCircle className="w-4 h-4" />
-                  Cancel
+                  <XCircle className="w-4 h-4 sm:mr-1" />
+                  <span className="hidden sm:inline">Cancel</span>
                 </Button>
                 <Button 
                   variant="default" 
                   size="sm"
-                  onClick={() => updateOrderStatus(order.id, 'preparing')}
+                  onClick={() => updateOrderStatus(order.id, 'completed')}
+                  className="flex-1 sm:flex-none"
                 >
-                  <ChefHat className="w-4 h-4" />
-                  Start Preparing
+                  <Check className="w-4 h-4 sm:mr-1" />
+                  <span className="hidden sm:inline">Complete</span>
                 </Button>
               </>
-            )}
-            {order.status === 'preparing' && (
-              <Button 
-                variant="success" 
-                size="sm"
-                onClick={() => updateOrderStatus(order.id, 'ready')}
-              >
-                <Check className="w-4 h-4" />
-                Mark Ready
-              </Button>
-            )}
-            {order.status === 'ready' && (
-              <Button 
-                variant="default" 
-                size="sm"
-                onClick={() => updateOrderStatus(order.id, 'served')}
-              >
-                <Truck className="w-4 h-4" />
-                Mark Served
-              </Button>
             )}
           </div>
         </div>
@@ -247,11 +294,61 @@ export default function OrdersPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold font-display">Orders</h1>
-          <p className="text-muted-foreground">Manage and track customer orders</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold font-display">Orders</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">Manage and track customer orders</p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchOrders(true)}
+              disabled={isRefreshing}
+            >
+              <RefreshCw className={`w-4 h-4 sm:mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Refresh</span>
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  disabled={isClearing}
+                >
+                  <Trash2 className="w-4 h-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Clear Orders</span>
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Clear All Orders?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete ALL orders from the database. This action cannot be undone.
+                    <br /><br />
+                    <strong>This will clear:</strong>
+                    <ul className="list-disc list-inside mt-2 space-y-1">
+                      <li>All orders (pending, completed, etc.)</li>
+                      <li>Order items and details</li>
+                      <li>Complete order history</li>
+                    </ul>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleClearTodayData}
+                    className="bg-destructive hover:bg-destructive/90"
+                  >
+                    Clear All Orders
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </div>
 
         {/* Loading/Error State */}
@@ -261,16 +358,10 @@ export default function OrdersPage() {
               <div className="text-center">Loading orders...</div>
             </CardContent>
           </Card>
-        ) : orders.length === 0 ? (
-          <Card>
-            <CardContent className="py-8">
-              <div className="text-center text-muted-foreground">No orders found</div>
-            </CardContent>
-          </Card>
         ) : (
           <>
             {/* Order Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
               {Object.entries(statusConfig).map(([key, config]) => {
                 const count = orders.filter((o) => o.status === key).length;
                 return (
@@ -295,20 +386,24 @@ export default function OrdersPage() {
             <Card>
               <CardHeader>
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
-                  <TabsList>
-                    <TabsTrigger value="all">All Orders</TabsTrigger>
-                    <TabsTrigger value="pending">Pending</TabsTrigger>
-                    <TabsTrigger value="preparing">Preparing</TabsTrigger>
-                    <TabsTrigger value="ready">Ready</TabsTrigger>
-                    <TabsTrigger value="served">Served</TabsTrigger>
+                  <TabsList className="w-full overflow-x-auto flex-nowrap justify-start">
+                    <TabsTrigger value="all" className="whitespace-nowrap">All Orders</TabsTrigger>
+                    <TabsTrigger value="pending" className="whitespace-nowrap">Pending</TabsTrigger>
+                    <TabsTrigger value="confirmed" className="whitespace-nowrap">Confirmed</TabsTrigger>
+                    <TabsTrigger value="preparing" className="whitespace-nowrap">Preparing</TabsTrigger>
+                    <TabsTrigger value="ready" className="whitespace-nowrap">Ready</TabsTrigger>
+                    <TabsTrigger value="served" className="whitespace-nowrap">Served</TabsTrigger>
+                    <TabsTrigger value="completed" className="whitespace-nowrap">Completed</TabsTrigger>
                   </TabsList>
                 </Tabs>
               </CardHeader>
               <CardContent>
-                {filterOrders(activeTab).length === 0 ? (
+                {orders.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">No orders yet</div>
+                ) : filterOrders(activeTab).length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">No orders in this category</div>
                 ) : (
-                  <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                     {filterOrders(activeTab).map((order) => (
                       <OrderCard key={order.id} order={order} />
                     ))}

@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
 import { Card, CardContent } from '@/components/ui/card';
-
-const API_BASE_URL = 'http://localhost:5000/api';
+import { getApiUrl } from '@/lib/apiClient';
 
 export default function OrdersPageNew() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -19,7 +18,7 @@ export default function OrdersPageNew() {
       setError(null);
       
       const restaurantId = 'fd64a3b7-4c88-4a5d-b53f-a18ef35bcfe4';
-      const response = await fetch(`${API_BASE_URL}/orders?restaurantId=${restaurantId}`);
+      const response = await fetch(getApiUrl(`/api/orders?restaurantId=${restaurantId}`));
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

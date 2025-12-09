@@ -150,7 +150,7 @@ router.get('/:tableId/qr', async (req, res) => {
 
     if (result.rows.length === 0) {
       // Generate new QR code
-      const qrData = `${process.env.FRONTEND_URL || 'http://localhost:8080'}/menu/${tableId}`;
+      const qrData = `${process.env.FRONTEND_URL}/menu/${tableId}`;
       const insertResult = await pool.query(
         `INSERT INTO qr_codes (table_id, qr_data)
          VALUES ($1, $2)

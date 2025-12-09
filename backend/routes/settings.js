@@ -13,7 +13,7 @@ router.get('/', async (req, res) => {
     }
 
     const result = await pool.query(
-      'SELECT id, name, address, phone, email, description, logo_url, website FROM restaurants WHERE id = $1',
+      'SELECT id, name, address, contact_phone as phone, contact_email as email, description FROM restaurants WHERE id = $1',
       [restaurantId]
     );
 
@@ -31,7 +31,7 @@ router.get('/', async (req, res) => {
 // Update restaurant settings
 router.put('/', async (req, res) => {
   try {
-    const { restaurantId, name, address, phone, email, description, website } = req.body;
+    const { restaurantId, name, address, phone, email, description } = req.body;
     
     if (!restaurantId) {
       return res.status(400).json({ error: 'Restaurant ID is required' });
@@ -39,10 +39,10 @@ router.put('/', async (req, res) => {
 
     const result = await pool.query(
       `UPDATE restaurants 
-       SET name = $1, address = $2, phone = $3, email = $4, description = $5, website = $6, updated_at = NOW()
-       WHERE id = $7
-       RETURNING id, name, address, phone, email, description, website, updated_at`,
-      [name, address, phone, email, description, website, restaurantId]
+       SET name = $1, address = $2, contact_phone = $3, contact_email = $4, description = $5, updated_at = NOW()
+       WHERE id = $6
+       RETURNING id, name, address, contact_phone as phone, contact_email as email, description, updated_at`,
+      [name, address, phone, email, description, restaurantId]
     );
 
     if (result.rows.length === 0) {

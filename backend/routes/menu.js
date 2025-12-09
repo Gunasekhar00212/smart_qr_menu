@@ -165,24 +165,71 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/menu/:id - Delete a menu item
+// DELETE /api/menu/:id?force=true - Delete a menu item
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const { force } = req.query; // ?force=true to permanently delete
 
+    // Check if item exists
+    const checkResult = await pool.query(
+      'SELECT id FROM menu_items WHERE id = $1',
+      [id]
+    );
+
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Menu item not found' });
+    }
+
+    // Check if item is used in any orders
+    const orderCheck = await pool.query(
+      'SELECT COUNT(*) as count FROM order_items WHERE menu_item_id = $1',
+      [id]
+    );
+
+    const isUsedInOrders = parseInt(orderCheck.rows[0].count) > 0;
+
+    if (isUsedInOrders && force !== 'true') {
+      // Instead of deleting, mark as unavailable
+      await pool.query(
+        'UPDATE menu_items SET is_available = false, updated_at = NOW() WHERE id = $1',
+        [id]
+      );
+      return res.json({ 
+        message: 'Menu item is used in orders, marked as unavailable instead', 
+        id,
+        markedUnavailable: true,
+        canForceDelete: true // Inform frontend that force delete is possible
+      });
+    }
+
+    // Force delete - remove from order_items first
+    if (force === 'true' && isUsedInOrders) {
+      await pool.query(
+        'DELETE FROM order_items WHERE menu_item_id = $1',
+        [id]
+      );
+      console.log('⚠️ Force deleted order items for menu item:', id);
+    }
+
+    // Delete the menu item
     const result = await pool.query(
       'DELETE FROM menu_items WHERE id = $1 RETURNING id',
       [id]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Menu item not found' });
-    }
-
-    res.json({ message: 'Menu item deleted successfully', id: result.rows[0].id });
+    console.log('✅ Menu item deleted:', id, force === 'true' ? '(FORCED)' : '');
+    res.json({ 
+      message: force === 'true' ? 'Menu item force deleted permanently' : 'Menu item deleted successfully', 
+      id: result.rows[0].id,
+      forcedDelete: force === 'true'
+    });
   } catch (error) {
-    console.error('Error deleting menu item:', error);
-    res.status(500).json({ error: 'Failed to delete menu item' });
+    console.error('❌ Error deleting menu item:', error);
+    res.status(500).json({ 
+      error: 'Failed to delete menu item',
+      message: error.message 
+    });
   }
 });
 

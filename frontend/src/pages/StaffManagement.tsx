@@ -12,9 +12,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/apiClient';
 
 const RESTAURANT_ID = 'fd64a3b7-4c88-4a5d-b53f-a18ef35bcfe4';
-const API_BASE_URL = 'http://localhost:5000/api';
 
 type Staff = {
   id: string;
@@ -56,7 +56,7 @@ export default function StaffManagement() {
   const fetchStaff = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/staff?restaurantId=${RESTAURANT_ID}`);
+      const response = await fetch(getApiUrl(`/api/staff?restaurantId=${RESTAURANT_ID}`));
       if (response.ok) {
         const data = await response.json();
         setStaff(data);
@@ -97,7 +97,7 @@ export default function StaffManagement() {
     setIsSaving(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/staff`, {
+      const response = await fetch(getApiUrl('/api/staff'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -138,7 +138,7 @@ export default function StaffManagement() {
     setIsSaving(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/staff/${selected.id}`, {
+      const response = await fetch(getApiUrl(`/api/staff/${selected.id}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -177,7 +177,7 @@ export default function StaffManagement() {
     if (!confirm('Are you sure you want to delete this staff member?')) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/staff/${id}`, {
+      const response = await fetch(getApiUrl(`/api/staff/${id}`), {
         method: 'DELETE',
       });
 

@@ -1,24 +1,34 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, Pencil, Trash2, Loader2, AlertCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, AlertCircle, AlertTriangle } from 'lucide-react';
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Switch } from '@/components/ui/switch';
+import { getApiUrl } from '@/lib/apiClient';
 
-const API_BASE_URL = 'http://localhost:5000/api';
 const RESTAURANT_ID = 'fd64a3b7-4c88-4a5d-b53f-a18ef35bcfe4';
 
 // API functions
 async function fetchMenuItems(restaurantId) {
-  const response = await fetch(`${API_BASE_URL}/menu?restaurantId=${restaurantId}`);
+  const response = await fetch(getApiUrl(`/api/menu?restaurantId=${restaurantId}`));
   if (!response.ok) throw new Error('Failed to fetch menu items');
   const data = await response.json();
   // Transform to match frontend expectations
@@ -44,7 +54,7 @@ async function createMenuItem(item) {
     isAvailable: !item.isOutOfStock,
     imageUrl: item.image,
   };
-  const response = await fetch(`${API_BASE_URL}/menu`, {
+  const response = await fetch(getApiUrl('/api/menu'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -64,7 +74,7 @@ async function updateMenuItem({ id, ...data }) {
     isAvailable: data.isOutOfStock !== undefined ? !data.isOutOfStock : undefined,
     imageUrl: data.image,
   };
-  const response = await fetch(`${API_BASE_URL}/menu/${id}`, {
+  const response = await fetch(getApiUrl(`/api/menu/${id}`), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -74,10 +84,18 @@ async function updateMenuItem({ id, ...data }) {
 }
 
 async function deleteMenuItem(id) {
-  const response = await fetch(`${API_BASE_URL}/menu/${id}`, {
+  const response = await fetch(getApiUrl(`/api/menu/${id}`), {
     method: 'DELETE',
   });
   if (!response.ok) throw new Error('Failed to delete menu item');
+  return response.json();
+}
+
+async function forceDeleteMenuItem(id) {
+  const response = await fetch(getApiUrl(`/api/menu/${id}?force=true`), {
+    method: 'DELETE',
+  });
+  if (!response.ok) throw new Error('Failed to force delete menu item');
   return response.json();
 }
 
@@ -87,6 +105,7 @@ export default function MenuManagement() {
   
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [itemToDelete, setItemToDelete] = useState(null); // Track item for force delete
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -96,6 +115,7 @@ export default function MenuManagement() {
     isSpicy: false,
     isPopular: false,
     isOutOfStock: false,
+    isAvailable: true,
     image: '',
   });
 
@@ -129,13 +149,21 @@ export default function MenuManagement() {
   // Update mutation
   const updateMutation = useMutation({
     mutationFn: updateMenuItem,
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries(['menu-items', RESTAURANT_ID]);
-      setEditingItem(null);
-      resetForm();
+      // Only close dialog and reset form if it was a full edit
+      if (editingItem) {
+        setEditingItem(null);
+        resetForm();
+      }
+      const message = data.isAvailable === false 
+        ? 'Menu item marked as unavailable'
+        : data.isAvailable === true 
+        ? 'Menu item marked as available' 
+        : 'Menu item updated successfully';
       toast({
-        title: 'Success!',
-        description: 'Menu item updated successfully',
+        title: '✅ Success!',
+        description: message,
       });
     },
     onError: (error) => {
@@ -150,17 +178,51 @@ export default function MenuManagement() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: deleteMenuItem,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries(['menu-items', RESTAURANT_ID]);
+      if (data.markedUnavailable && data.canForceDelete) {
+        // Ask if user wants to force delete
+        setItemToDelete(data.id);
+        toast({
+          title: '⚠️ Item Marked Unavailable',
+          description: 'This item is used in orders. Click "Force Delete" to permanently remove it and its order history.',
+        });
+      } else if (data.markedUnavailable) {
+        toast({
+          title: '⚠️ Item Marked Unavailable',
+          description: 'This item is used in orders, so it was marked as unavailable instead of being deleted',
+        });
+      } else {
+        toast({
+          title: '✅ Success!',
+          description: 'Menu item deleted successfully',
+        });
+      }
+    },
+    onError: (error) => {
+      toast({
+        title: '❌ Error',
+        description: error.message || 'Failed to delete menu item. It may be used in existing orders.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Force delete mutation
+  const forceDeleteMutation = useMutation({
+    mutationFn: forceDeleteMenuItem,
     onSuccess: () => {
       queryClient.invalidateQueries(['menu-items', RESTAURANT_ID]);
+      setItemToDelete(null);
       toast({
-        title: 'Success!',
-        description: 'Menu item deleted successfully',
+        title: '✅ Force Deleted',
+        description: 'Menu item and its order history have been permanently removed',
       });
     },
     onError: (error) => {
       toast({
-        title: 'Error',
-        description: error.message,
+        title: '❌ Error',
+        description: error.message || 'Failed to force delete menu item',
         variant: 'destructive',
       });
     },
@@ -176,6 +238,7 @@ export default function MenuManagement() {
       isSpicy: false,
       isPopular: false,
       isOutOfStock: false,
+      isAvailable: true,
       image: '',
     });
   };
@@ -193,6 +256,7 @@ export default function MenuManagement() {
       isSpicy: formData.isSpicy,
       isPopular: formData.isPopular,
       isOutOfStock: formData.isOutOfStock,
+      isAvailable: formData.isAvailable,
       image: formData.image || null,
     };
 
@@ -214,7 +278,8 @@ export default function MenuManagement() {
       isSpicy: item.isSpicy,
       isPopular: item.isPopular,
       isOutOfStock: item.isOutOfStock,
-      image: item.image || '',
+      isAvailable: item.isAvailable !== false,
+      image: item.imageUrl || '',
     });
     setIsAddItemOpen(true);
   };
@@ -223,6 +288,14 @@ export default function MenuManagement() {
     if (confirm('Are you sure you want to delete this item?')) {
       deleteMutation.mutate(id);
     }
+  };
+
+  const handleStockToggle = (item) => {
+    const newAvailability = !item.isAvailable;
+    updateMutation.mutate({
+      id: item.id,
+      isAvailable: newAvailability
+    });
   };
 
   const handleDialogClose = () => {
@@ -381,6 +454,15 @@ export default function MenuManagement() {
                   </div>
                   
                   <div className="flex items-center justify-between">
+                    <Label htmlFor="isAvailable" className="font-semibold">In Stock</Label>
+                    <Switch
+                      id="isAvailable"
+                      checked={formData.isAvailable}
+                      onCheckedChange={(checked) => setFormData({ ...formData, isAvailable: checked })}
+                    />
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
                     <Label htmlFor="isOutOfStock">Out of Stock</Label>
                     <Switch
                       id="isOutOfStock"
@@ -447,7 +529,7 @@ export default function MenuManagement() {
                       <motion.div
                         key={item.id}
                         layout
-                        className="glass rounded-lg p-4 relative group"
+                        className="glass rounded-lg p-4 relative group flex flex-col h-full"
                       >
                         <div className="flex justify-between items-start mb-3">
                           <div className="flex-1">
@@ -458,7 +540,7 @@ export default function MenuManagement() {
                               <h3 className="font-semibold">{item.name}</h3>
                             </div>
                             {item.description && (
-                              <p className="text-sm text-muted-foreground mb-2">
+                              <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
                                 {item.description}
                               </p>
                             )}
@@ -468,7 +550,7 @@ export default function MenuManagement() {
                           </div>
                         </div>
 
-                        <div className="flex flex-wrap gap-1 mb-3">
+                        <div className="flex flex-wrap gap-1 mb-3 min-h-[28px]">
                           {item.isVeg && (
                             <Badge variant="outline" className="text-green-600">
                               Veg
@@ -487,9 +569,12 @@ export default function MenuManagement() {
                           {item.isOutOfStock && (
                             <Badge variant="destructive">Out of Stock</Badge>
                           )}
+                          {!item.isAvailable && (
+                            <Badge variant="secondary">Unavailable</Badge>
+                          )}
                         </div>
 
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 mt-auto">
                           <Button
                             variant="outline"
                             size="sm"
@@ -517,6 +602,38 @@ export default function MenuManagement() {
           )}
         </div>
       </div>
+
+      {/* Force Delete Confirmation Dialog */}
+      <AlertDialog open={itemToDelete !== null} onOpenChange={() => setItemToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Force Delete Item?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This item is used in existing orders. If you force delete it:
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>The menu item will be permanently removed</li>
+                <li>It will be removed from all order histories</li>
+                <li>This action cannot be undone</li>
+              </ul>
+              <p className="mt-3 font-semibold text-foreground">
+                Recommended: Keep it marked as "unavailable" to preserve order history.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => forceDeleteMutation.mutate(itemToDelete)}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              Force Delete Permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }

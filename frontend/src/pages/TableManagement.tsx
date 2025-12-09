@@ -23,8 +23,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/apiClient';
 
-const API_BASE_URL = 'http://localhost:5000/api';
 const RESTAURANT_ID = 'fd64a3b7-4c88-4a5d-b53f-a18ef35bcfe4';
 
 interface Table {
@@ -63,7 +63,7 @@ export default function TableManagement() {
   const fetchTables = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(`${API_BASE_URL}/tables?restaurantId=${RESTAURANT_ID}`);
+      const response = await fetch(getApiUrl(`/api/tables?restaurantId=${RESTAURANT_ID}`));
       if (!response.ok) throw new Error('Failed to fetch tables');
       const data = await response.json();
 
@@ -122,7 +122,7 @@ export default function TableManagement() {
 
       // Create tables
       for (let i = 1; i <= tableCount; i++) {
-        const response = await fetch(`${API_BASE_URL}/tables`, {
+        const response = await fetch(getApiUrl('/api/tables'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -158,7 +158,7 @@ export default function TableManagement() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/tables/${tableId}`, {
+      const response = await fetch(getApiUrl(`/api/tables/${tableId}`), {
         method: 'DELETE',
       });
 

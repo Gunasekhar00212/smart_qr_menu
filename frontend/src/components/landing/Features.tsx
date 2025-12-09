@@ -70,23 +70,23 @@ const features = [
 
 export function Features() {
   return (
-    <section id="features" className="py-24 bg-secondary/30">
-      <div className="container mx-auto px-4">
+    <section id="features" className="py-12 sm:py-16 lg:py-24 bg-secondary/30">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-16"
+          className="text-center mb-12 sm:mb-16"
         >
-          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold font-display mb-4">
-            Everything You Need to <span className="text-gradient">Digitize</span> Your Restaurant
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold font-display mb-3 sm:mb-4 px-4">
+            Everything You Need to <span className="bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent font-extrabold">Digitize</span> Your Restaurant
           </h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto px-4">
             A complete suite of tools designed to streamline operations, enhance customer experience, and boost revenue.
           </p>
         </motion.div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {features.map((feature, index) => (
             <motion.div
               key={feature.title}

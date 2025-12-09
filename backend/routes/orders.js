@@ -71,8 +71,24 @@ router.post('/', validateOrderCreation, async (req, res) => {
     await client.query('BEGIN');
 
     // Get or find table_id
-    let finalTableId = tableId;
-    if (!finalTableId && tableNumber) {
+    let finalTableId = null;
+    
+    // If tableId is provided and looks like a UUID, use it
+    if (tableId && tableId.length > 10 && tableId.includes('-')) {
+      finalTableId = tableId;
+    } 
+    // If tableId is a number or string number, look up by table number
+    else if (tableId && !isNaN(tableId)) {
+      const tableResult = await client.query(
+        'SELECT id FROM tables WHERE restaurant_id = $1 AND number = $2',
+        [restaurantId, parseInt(tableId)]
+      );
+      if (tableResult.rows.length > 0) {
+        finalTableId = tableResult.rows[0].id;
+      }
+    }
+    // If tableNumber is provided separately
+    else if (tableNumber) {
       const tableResult = await client.query(
         'SELECT id FROM tables WHERE restaurant_id = $1 AND number = $2',
         [restaurantId, tableNumber]
@@ -183,6 +199,68 @@ router.put('/:id/status', async (req, res) => {
   } catch (error) {
     console.error('Error updating order status:', error);
     res.status(500).json({ error: 'Failed to update order status' });
+  }
+});
+
+// DELETE /api/orders/clear-today?restaurantId=ID - Clear today's orders
+router.delete('/clear-today', validateRestaurantId, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { restaurantId } = req.query;
+
+    if (!restaurantId) {
+      return res.status(400).json({ error: 'restaurantId is required' });
+    }
+
+    console.log('🗑️  Clearing ALL orders for restaurant:', restaurantId);
+
+    await client.query('BEGIN');
+
+    // Get ALL orders for this restaurant (not just today)
+    const ordersResult = await client.query(
+      `SELECT id, created_at FROM orders 
+       WHERE restaurant_id = $1`,
+      [restaurantId]
+    );
+
+    const orderIds = ordersResult.rows.map(row => row.id);
+
+    console.log(`📊 Found ${orderIds.length} orders to delete`);
+    if (orderIds.length > 0) {
+      console.log('Order IDs:', orderIds);
+      console.log('Order timestamps:', ordersResult.rows.map(r => r.created_at));
+    }
+
+    if (orderIds.length > 0) {
+      // Delete order items first (foreign key constraint)
+      const itemsResult = await client.query(
+        `DELETE FROM order_items WHERE order_id = ANY($1) RETURNING id`,
+        [orderIds]
+      );
+      console.log(`🗑️  Deleted ${itemsResult.rowCount} order items`);
+
+      // Delete orders
+      const ordersDeleteResult = await client.query(
+        `DELETE FROM orders WHERE id = ANY($1) RETURNING id`,
+        [orderIds]
+      );
+      console.log(`🗑️  Deleted ${ordersDeleteResult.rowCount} orders`);
+    }
+
+    await client.query('COMMIT');
+    console.log('✅ Clear operation completed successfully');
+
+    res.json({ 
+      success: true, 
+      deletedCount: orderIds.length,
+      message: `Cleared ${orderIds.length} orders` 
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('❌ Error clearing orders:', error);
+    res.status(500).json({ error: 'Failed to clear orders', details: error.message });
+  } finally {
+    client.release();
   }
 });
 

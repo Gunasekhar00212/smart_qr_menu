@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const pool = require('./db');
 require('dotenv').config();
 
 const menuRoutes = require('./routes/menu');
@@ -9,13 +10,19 @@ const tablesRoutes = require('./routes/tables');
 const settingsRoutes = require('./routes/settings');
 const staffRoutes = require('./routes/staff');
 const feedbackRoutes = require('./routes/feedback');
+const serviceRequestsRoutes = require('./routes/service-requests');
 const { sanitizeBody, rateLimit } = require('./middleware/validation');
 
 const app = express();
-const PORT = process.env.PORT || 5175;
+const PORT = process.env.PORT || 5000;
+const FRONTEND_URL = process.env.FRONTEND_URL;
 
 // Middleware
-app.use(cors());
+// CORS configuration - allow requests from frontend
+app.use(cors({
+  origin: FRONTEND_URL,
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -44,6 +51,7 @@ app.use('/api/tables', tablesRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/feedback', feedbackRoutes);
+app.use('/api/service-requests', serviceRequestsRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -59,6 +67,7 @@ app.use((err, req, res, next) => {
 // Start server
 app.listen(PORT, () => {
   console.log(`\n🚀 Smart Menu AI Backend Server`);
-  console.log(`📍 Running on http://localhost:${PORT}`);
-  console.log(`🏥 Health check: http://localhost:${PORT}/api/health\n`);
+  console.log(`📍 Running on port ${PORT}`);
+  console.log(`🌐 CORS enabled for: ${FRONTEND_URL || 'ALL ORIGINS (⚠️  Set FRONTEND_URL in production!)'}`);
+  console.log(`🏥 Health check: /api/health\n`);
 });

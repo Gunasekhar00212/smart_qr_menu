@@ -9,9 +9,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Building2, User, Lock, Save } from 'lucide-react';
+import { getApiUrl } from '@/lib/apiClient';
 
 const RESTAURANT_ID = 'fd64a3b7-4c88-4a5d-b53f-a18ef35bcfe4';
-const API_BASE_URL = 'http://localhost:5000/api';
 
 export default function Settings() {
   const { toast } = useToast();
@@ -23,8 +23,7 @@ export default function Settings() {
     address: '',
     phone: '',
     email: '',
-    description: '',
-    website: ''
+    description: ''
   });
   
   // User profile state
@@ -49,23 +48,24 @@ export default function Settings() {
     const fetchSettings = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch(`${API_BASE_URL}/settings?restaurantId=${RESTAURANT_ID}`);
-        if (response.ok) {
-          const data = await response.json();
-          setRestaurant({
-            name: data.name || '',
-            address: data.address || '',
-            phone: data.phone || '',
-            email: data.email || '',
-            description: data.description || '',
-            website: data.website || ''
-          });
+        const response = await fetch(getApiUrl(`/api/settings?restaurantId=${RESTAURANT_ID}`));
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to load restaurant settings');
         }
+        const data = await response.json();
+        setRestaurant({
+          name: data.name || '',
+          address: data.address || '',
+          phone: data.phone || '',
+          email: data.email || '',
+          description: data.description || ''
+        });
       } catch (error) {
         console.error('Error fetching settings:', error);
         toast({
-          title: 'Error',
-          description: 'Failed to load restaurant settings',
+          title: '❌ Error',
+          description: error.message || 'Failed to load restaurant settings',
           variant: 'destructive',
         });
       } finally {
@@ -81,7 +81,7 @@ export default function Settings() {
     if (user?.id) {
       const fetchProfile = async () => {
         try {
-          const response = await fetch(`${API_BASE_URL}/settings/profile/${user.id}`);
+          const response = await fetch(getApiUrl(`/api/settings/profile/${user.id}`));
           if (response.ok) {
             const data = await response.json();
             setProfile({
@@ -104,7 +104,7 @@ export default function Settings() {
     setIsSaving(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/settings`, {
+      const response = await fetch(getApiUrl('/api/settings'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -141,7 +141,7 @@ export default function Settings() {
     setIsSaving(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/settings/profile/${user.id}`, {
+      const response = await fetch(getApiUrl(`/api/settings/profile/${user.id}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(profile),
@@ -193,7 +193,7 @@ export default function Settings() {
     setIsSaving(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/settings/change-password`, {
+      const response = await fetch(getApiUrl('/api/settings/change-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -298,15 +298,6 @@ export default function Settings() {
                         onChange={(e) => setRestaurant({ ...restaurant, email: e.target.value })}
                         placeholder="contact@restaurant.com"
                         required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="website">Website</Label>
-                      <Input
-                        id="website"
-                        value={restaurant.website}
-                        onChange={(e) => setRestaurant({ ...restaurant, website: e.target.value })}
-                        placeholder="https://www.restaurant.com"
                       />
                     </div>
                   </div>

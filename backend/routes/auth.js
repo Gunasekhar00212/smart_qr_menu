@@ -186,7 +186,7 @@ router.post('/forgot-password', validateEmail, async (req, res) => {
       [resetTokenHash, resetTokenExpiry, email]
     );
 
-    const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:8080'}/reset-password?token=${resetToken}`;
+    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
 
     // Log for console and return link
     console.log('\n✉️  PASSWORD RESET REQUESTED');

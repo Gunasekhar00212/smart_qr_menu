@@ -1,6 +1,5 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-
-const API_BASE_URL = 'http://localhost:5000/api';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { getApiUrl } from '@/lib/apiClient';
 
 interface User {
   id: string;
@@ -25,10 +24,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Restore user session on mount
+  useEffect(() => {
+    const restoreSession = async () => {
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser);
+          setUser(parsedUser);
+        } catch (error) {
+          console.error('Error restoring session:', error);
+          localStorage.removeItem('user');
+        }
+      }
+    };
+    restoreSession();
+  }, []);
+
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      const response = await fetch(getApiUrl('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -42,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       setUser(data.user);
       localStorage.setItem('userId', data.user.id);
+      localStorage.setItem('user', JSON.stringify(data.user));
     } catch (error) {
       console.error('Login error:', error);
       throw error;
@@ -53,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signup = async (email: string, password: string, name: string) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+      const response = await fetch(getApiUrl('/api/auth/signup'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, name }),
@@ -67,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       setUser(data.user);
       localStorage.setItem('userId', data.user.id);
+      localStorage.setItem('user', JSON.stringify(data.user));
     } catch (error) {
       console.error('Signup error:', error);
       throw error;
@@ -78,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     setUser(null);
     localStorage.removeItem('userId');
+    localStorage.removeItem('user');
   };
 
   return (

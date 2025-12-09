@@ -5,8 +5,8 @@ import { Link } from 'react-router-dom';
 export function Hero() {
   return (
     <section className="bg-[#fbf9f6] text-gray-800">
-      <div className="container mx-auto px-6 py-20">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-20">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
 
           {/* Right column on desktop, top on mobile */}
           <motion.div
@@ -60,36 +60,21 @@ export function Hero() {
               AI-Powered Restaurant Platform
             </div>
 
-            <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold leading-tight mb-4">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold leading-tight mb-3 sm:mb-4">
               Transform Your Restaurant Experience
             </h1>
 
-            <p className="text-gray-600 text-base md:text-lg max-w-xl mb-8 mx-auto lg:mx-0">
+            <p className="text-gray-600 text-base sm:text-lg max-w-xl mb-6 sm:mb-8 mx-auto lg:mx-0">
               Smart QR menus, AI-powered ordering, and real-time management — all in one platform.
             </p>
 
-            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-3 sm:gap-4 justify-center lg:justify-start mb-6">
-              <Link to="/signup" className="inline-flex items-center gap-3 px-5 py-3 rounded-lg bg-gradient-to-r from-orange-400 to-orange-500 text-white font-semibold shadow-sm">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-start gap-3 justify-center lg:justify-start mb-4 sm:mb-6">
+              <Link to="/signup" className="inline-flex items-center justify-center gap-3 px-4 sm:px-5 py-3 rounded-lg bg-gradient-to-r from-orange-400 to-orange-500 text-white font-semibold shadow-sm text-sm sm:text-base">
                 Get Started Free
               </Link>
-              <Link to="/demo" className="inline-flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 text-gray-700 bg-white">
+              <Link to="/demo" className="inline-flex items-center justify-center gap-3 px-4 py-3 rounded-lg border border-gray-200 text-gray-700 bg-white text-sm sm:text-base">
                 View Demo
               </Link>
-            </div>
-
-            {/* Stat cards */}
-            <div className="max-w-md mx-auto lg:mx-0">
-              <div className="grid grid-cols-3 sm:grid-cols-3 gap-3">
-                <div className="bg-white rounded-xl p-3 text-center shadow-sm border border-gray-50">
-                  <div className="text-lg font-semibold">500+ <span className="text-sm font-normal text-gray-500">Restaurants</span></div>
-                </div>
-                <div className="bg-white rounded-xl p-3 text-center shadow-sm border border-gray-50">
-                  <div className="text-lg font-semibold">10K+ <span className="text-sm font-normal text-gray-500">Orders/Day</span></div>
-                </div>
-                <div className="bg-white rounded-xl p-3 text-center shadow-sm border border-gray-50">
-                  <div className="text-lg font-semibold">99.9% <span className="text-sm font-normal text-gray-500">Uptime</span></div>
-                </div>
-              </div>
             </div>
           </motion.div>
         </div>

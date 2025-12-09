@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
   TrendingUp,
   DollarSign,
@@ -9,68 +10,40 @@ import {
   ArrowDownRight,
   Clock,
   UtensilsCrossed,
+  Bell,
+  AlertCircle,
+  CheckCircle2,
+  TrendingDown,
+  RefreshCw,
+  Eye,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { getApiUrl } from '@/lib/apiClient';
 
-const API_BASE_URL = 'http://localhost:5000/api';
 const RESTAURANT_ID = 'fd64a3b7-4c88-4a5d-b53f-a18ef35bcfe4';
 
-const stats = [
-  {
-    title: 'Today\'s Revenue',
-    value: '₹2,847',
-    change: '+12.5%',
-    trend: 'up',
-    icon: DollarSign,
-  },
-  {
-    title: 'Total Orders',
-    value: '156',
-    change: '+8.2%',
-    trend: 'up',
-    icon: ShoppingBag,
-  },
-  {
-    title: 'Active Tables',
-    value: '12/20',
-    change: '60%',
-    trend: 'neutral',
-    icon: UtensilsCrossed,
-  },
-  {
-    title: 'Avg Wait Time',
-    value: '8 min',
-    change: '-2.3%',
-    trend: 'down',
-    icon: Clock,
-  },
-];
-
-const recentOrders = [
-  { id: 'ORD-001', table: 'Table 5', items: 4, total: '₹45.99', status: 'preparing', time: '2 min ago' },
-  { id: 'ORD-002', table: 'Table 12', items: 2, total: '₹28.50', status: 'ready', time: '5 min ago' },
-  { id: 'ORD-003', table: 'Table 3', items: 6, total: '₹89.00', status: 'served', time: '12 min ago' },
-  { id: 'ORD-004', table: 'Table 8', items: 3, total: '₹34.75', status: 'pending', time: '1 min ago' },
-];
-
-const popularItems = [
-  { name: 'Margherita Pizza', orders: 42, revenue: '₹629.58' },
-  { name: 'Grilled Salmon', orders: 38, revenue: '₹949.62' },
-  { name: 'Caesar Salad', orders: 35, revenue: '₹454.65' },
-  { name: 'Beef Burger', orders: 31, revenue: '₹464.69' },
-];
-
-const statusColors = {
-  pending: 'bg-warning/20 text-warning',
-  preparing: 'bg-info/20 text-info',
-  ready: 'bg-success/20 text-success',
-  served: 'bg-muted text-muted-foreground',
-};
-
 export default function Dashboard() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  
   const [stats, setStats] = useState([
     { title: 'Today\'s Revenue', value: '₹0', change: '0%', trend: 'neutral' as const, icon: DollarSign },
     { title: 'Total Orders', value: '0', change: '0%', trend: 'neutral' as const, icon: ShoppingBag },
@@ -79,68 +52,159 @@ export default function Dashboard() {
   ]);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [popularItems, setPopularItems] = useState<any[]>([]);
+  const [serviceRequests, setServiceRequests] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [isClearing, setIsClearing] = useState(false);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (silent = false) => {
     try {
-      setIsLoading(true);
+      console.log('🔄 fetchDashboardData called, silent:', silent);
+      
+      if (!silent) setIsLoading(true);
+      else setIsRefreshing(true);
 
-      // Fetch orders
-      const ordersResponse = await fetch(`${API_BASE_URL}/orders`);
+      console.log('📊 Loading states set - isLoading:', !silent, 'isRefreshing:', silent);
+      console.log('Fetching dashboard data...');
+
+      // Fetch all data in parallel
+      const [ordersResponse, tablesResponse, menuResponse, serviceResponse] = await Promise.all([
+        fetch(getApiUrl(`/api/orders?restaurantId=${RESTAURANT_ID}`)),
+        fetch(getApiUrl(`/api/tables?restaurantId=${RESTAURANT_ID}`)),
+        fetch(getApiUrl(`/api/menu?restaurantId=${RESTAURANT_ID}`)),
+        fetch(getApiUrl(`/api/service-requests?restaurantId=${RESTAURANT_ID}`)),
+      ]);
+
+      console.log('Response status:', {
+        orders: ordersResponse.ok,
+        tables: tablesResponse.ok,
+        menu: menuResponse.ok,
+        service: serviceResponse.ok
+      });
+
       const orders = await ordersResponse.json();
-
-      // Fetch tables
-      const tablesResponse = await fetch(`${API_BASE_URL}/tables?restaurantId=${RESTAURANT_ID}`);
       const tables = await tablesResponse.json();
+      const menuItems = await menuResponse.json();
+      const serviceReqs = await serviceResponse.json();
 
-      // Calculate today's revenue
+      console.log('Fetched data:', {
+        ordersCount: orders.length,
+        tablesCount: tables.length,
+        menuItemsCount: menuItems.length,
+        serviceReqsCount: serviceReqs.length
+      });
+
+      // Calculate today's revenue and yesterday's for comparison - only from completed orders
       const today = new Date();
       today.setHours(0, 0, 0, 0);
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      
       const todayOrders = orders.filter((o: any) => new Date(o.createdAt || o.created_at) >= today);
-      const todayRevenue = todayOrders.reduce((sum: number, o: any) => sum + (o.totalCents || o.total_cents) / 100, 0);
+      const yesterdayOrders = orders.filter((o: any) => {
+        const date = new Date(o.createdAt || o.created_at);
+        return date >= yesterday && date < today;
+      });
 
-      // Calculate active tables
-      const activeTables = tables.filter((t: any) => t.active_sessions > 0).length;
+      // Only count revenue from completed orders
+      const todayCompletedOrders = todayOrders.filter((o: any) => o.status?.toUpperCase() === 'COMPLETED');
+      const yesterdayCompletedOrders = yesterdayOrders.filter((o: any) => o.status?.toUpperCase() === 'COMPLETED');
+      
+      const todayRevenue = todayCompletedOrders.reduce((sum: number, o: any) => sum + (o.totalCents || o.total_cents) / 100, 0);
+      const yesterdayRevenue = yesterdayCompletedOrders.reduce((sum: number, o: any) => sum + (o.totalCents || o.total_cents) / 100, 0);
+      const revenueChange = yesterdayRevenue > 0 ? ((todayRevenue - yesterdayRevenue) / yesterdayRevenue * 100).toFixed(1) : '0';
+      const ordersChange = yesterdayOrders.length > 0 ? ((todayOrders.length - yesterdayOrders.length) / yesterdayOrders.length * 100).toFixed(1) : '0';
+
+      // Calculate active tables based on active orders (pending, confirmed, preparing, ready)
+      const activeOrderStatuses = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY'];
+      const activeOrders = todayOrders.filter((o: any) => activeOrderStatuses.includes(o.status?.toUpperCase()));
+      const activeTableNumbers = new Set(activeOrders.map((o: any) => o.tableNumber || o.table_number).filter(Boolean));
+      const activeTables = activeTableNumbers.size;
+      const tableOccupancy = tables.length > 0 ? Math.round(activeTables / tables.length * 100) : 0;
+
+      // Calculate average wait time (time from order creation to ready status)
+      const completedOrders = todayOrders.filter((o: any) => o.status === 'READY' || o.status === 'SERVED' || o.status === 'COMPLETED');
+      const totalWaitTime = completedOrders.reduce((sum: number, o: any) => {
+        const created = new Date(o.createdAt || o.created_at).getTime();
+        const updated = new Date(o.updatedAt || o.updated_at).getTime();
+        return sum + (updated - created) / 1000 / 60; // minutes
+      }, 0);
+      const avgWaitTime = completedOrders.length > 0 ? Math.round(totalWaitTime / completedOrders.length) : 0;
+
+      console.log('Calculated stats:', {
+        todayRevenue,
+        todayOrdersCount: todayOrders.length,
+        activeTables,
+        avgWaitTime,
+        revenueChange,
+        ordersChange
+      });
 
       // Update stats
       setStats([
-        { title: 'Today\'s Revenue', value: `₹${todayRevenue.toFixed(2)}`, change: '+0%', trend: 'up', icon: DollarSign },
-        { title: 'Total Orders', value: `${orders.length}`, change: '+0%', trend: 'up', icon: ShoppingBag },
-        { title: 'Active Tables', value: `${activeTables}/${tables.length}`, change: `${Math.round(activeTables / tables.length * 100)}%`, trend: 'neutral', icon: UtensilsCrossed },
-        { title: 'Avg Wait Time', value: '~5 min', change: '0%', trend: 'neutral', icon: Clock },
+        { 
+          title: 'Today\'s Revenue', 
+          value: `₹${todayRevenue.toFixed(2)}`, 
+          change: `${parseFloat(revenueChange) >= 0 ? '+' : ''}${revenueChange}%`, 
+          trend: parseFloat(revenueChange) >= 0 ? 'up' : 'down', 
+          icon: DollarSign 
+        },
+        { 
+          title: 'Total Orders', 
+          value: `${todayOrders.length}`, 
+          change: `${parseFloat(ordersChange) >= 0 ? '+' : ''}${ordersChange}%`, 
+          trend: parseFloat(ordersChange) >= 0 ? 'up' : 'down', 
+          icon: ShoppingBag 
+        },
+        { 
+          title: 'Active Tables', 
+          value: `${activeTables}/${tables.length}`, 
+          change: `${tableOccupancy}% occupied`, 
+          trend: 'neutral', 
+          icon: UtensilsCrossed 
+        },
+        { 
+          title: 'Avg Wait Time', 
+          value: `${avgWaitTime} min`, 
+          change: avgWaitTime < 15 ? 'Good' : 'High', 
+          trend: avgWaitTime < 15 ? 'down' : 'up', 
+          icon: Clock 
+        },
       ]);
 
-      // Transform recent orders
-      const transformedOrders = orders.slice(0, 4).map((order: any) => ({
-        id: order.id || order.order_id,
-        table: `Table ${order.tableNumber || order.table_number}`,
-        items: order.items?.length || 0,
-        total: `₹${((order.totalCents || order.total_cents) / 100).toFixed(2)}`,
-        status: order.status || 'pending',
-        time: formatTimeAgo(new Date(order.createdAt || order.created_at)),
-      }));
+      // Transform recent orders - show only today's orders sorted by time
+      const transformedOrders = todayOrders
+        .sort((a: any, b: any) => new Date(b.createdAt || b.created_at).getTime() - new Date(a.createdAt || a.created_at).getTime())
+        .slice(0, 5)
+        .map((order: any, index: number) => ({
+          id: `ORD ${todayOrders.length - index}`,
+          table: `Table ${order.tableNumber || order.table_number || 'N/A'}`,
+          items: order.items?.length || 0,
+          total: `₹${((order.totalCents || order.total_cents) / 100).toFixed(2)}`,
+          status: (order.status || 'pending').toLowerCase(),
+          time: formatTimeAgo(new Date(order.createdAt || order.created_at)),
+        }));
       setRecentOrders(transformedOrders);
 
-      // Calculate popular items
+      // Calculate popular items from today's orders
       const itemCounts: Record<string, { count: number; revenue: number }> = {};
-      orders.forEach((order: any) => {
+      todayOrders.forEach((order: any) => {
         order.items?.forEach((item: any) => {
-          const name = item.name || item.item_name;
+          const name = item.name || item.itemName || item.item_name || item.menuItemName;
+          if (!name || name === 'null') return; // Skip invalid items
           if (!itemCounts[name]) {
             itemCounts[name] = { count: 0, revenue: 0 };
           }
-          itemCounts[name].count += item.quantity;
-          itemCounts[name].revenue += (item.priceCents || item.price_cents) * item.quantity / 100;
+          itemCounts[name].count += item.quantity || 1;
+          const price = item.unitPriceCents || item.unit_price_cents || item.priceCents || item.price_cents || 0;
+          itemCounts[name].revenue += (price * (item.quantity || 1)) / 100;
         });
       });
 
       const sortedItems = Object.entries(itemCounts)
         .sort(([, a], [, b]) => b.count - a.count)
-        .slice(0, 4)
+        .slice(0, 5)
         .map(([name, data]) => ({
           name,
           orders: data.count,
@@ -148,10 +212,93 @@ export default function Dashboard() {
         }));
       setPopularItems(sortedItems);
 
+      // Get pending service requests
+      const pendingRequests = serviceReqs
+        .filter((req: any) => req.status === 'PENDING')
+        .sort((a: any, b: any) => new Date(b.created_at || b.createdAt).getTime() - new Date(a.created_at || a.createdAt).getTime())
+        .slice(0, 5)
+        .map((req: any) => ({
+          id: req.id,
+          type: req.request_type || req.requestType,
+          table: `Table ${req.table_number || req.tableNumber || 'N/A'}`,
+          time: formatTimeAgo(new Date(req.created_at || req.createdAt)),
+        }));
+      setServiceRequests(pendingRequests);
+
+      setLastUpdated(new Date());
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      if (!silent) {
+        toast({
+          title: 'Error',
+          description: 'Failed to load dashboard data',
+          variant: 'destructive',
+        });
+      }
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+    // Auto-refresh every 5 seconds for real-time updates
+    const interval = setInterval(() => {
+      fetchDashboardData(true);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleClearTodayData = async () => {
+    try {
+      setIsClearing(true);
+      const response = await fetch(getApiUrl(`/api/orders/clear-today?restaurantId=${RESTAURANT_ID}`), {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        toast({
+          title: 'Orders Cleared',
+          description: `Successfully cleared ${data.deletedCount || 0} orders`,
+        });
+        fetchDashboardData(true);
+      } else {
+        throw new Error('Failed to clear data');
+      }
+    } catch (error) {
+      console.error('Error clearing today\'s data:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to clear today\'s data',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
+  const handleResolveServiceRequest = async (id: string) => {
+    try {
+      const response = await fetch(getApiUrl(`/api/service-requests/${id}/resolve`), {
+        method: 'PUT',
+      });
+
+      if (response.ok) {
+        toast({
+          title: 'Request Resolved',
+          description: 'Service request has been marked as resolved',
+        });
+        fetchDashboardData(true);
+      }
+    } catch (error) {
+      console.error('Error resolving service request:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to resolve service request',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -165,17 +312,82 @@ export default function Dashboard() {
     const days = Math.floor(hours / 24);
     return `${days} day${days > 1 ? 's' : ''} ago`;
   };
+
+  const getServiceRequestIcon = (type: string) => {
+    switch (type) {
+      case 'WAITER': return '🙋';
+      case 'WATER': return '💧';
+      case 'BILL': return '💰';
+      default: return '📝';
+    }
+  };
+
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold font-display">Dashboard</h1>
-          <p className="text-muted-foreground">Welcome back! Here's what's happening today.</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold font-display">Dashboard</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">
+              Welcome back! Here's what's happening today.
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Last updated: {lastUpdated.toLocaleTimeString()}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  disabled={isClearing}
+                >
+                  <Trash2 className="w-4 h-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Clear Orders</span>
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Clear All Orders?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete ALL orders from the database. This action cannot be undone.
+                    <br /><br />
+                    <strong>This will reset:</strong>
+                    <ul className="list-disc list-inside mt-2 space-y-1">
+                      <li>All revenue to ₹0</li>
+                      <li>Order count to 0</li>
+                      <li>Recent orders list</li>
+                      <li>Popular items statistics</li>
+                      <li>All order history</li>
+                    </ul>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleClearTodayData}
+                    className="bg-destructive hover:bg-destructive/90"
+                  >
+                    Clear All Orders
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            <Button
+              size="sm"
+              onClick={() => navigate('/dashboard/menus')}
+            >
+              <Plus className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Add Menu Item</span>
+            </Button>
+          </div>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           {stats.map((stat, index) => (
             <motion.div
               key={stat.title}
@@ -212,7 +424,7 @@ export default function Dashboard() {
         </div>
 
         {/* Content Grid */}
-        <div className="grid lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Recent Orders */}
           <Card className="lg:col-span-2">
             <CardHeader className="flex-row items-center justify-between">
@@ -244,12 +456,28 @@ export default function Dashboard() {
                       </div>
                       <div className="text-right">
                         <p className="font-bold">{order.total}</p>
-                        <Badge className={statusColors[order.status as keyof typeof statusColors]}>
-                          {order.status}
+                        <Badge 
+                          variant={
+                            order.status === 'pending' || order.status === 'confirmed' ? 'default' :
+                            order.status === 'preparing' ? 'secondary' :
+                            order.status === 'ready' ? 'outline' :
+                            'secondary'
+                          }
+                          className="text-xs"
+                        >
+                          {order.status.toUpperCase()}
                         </Badge>
                       </div>
                     </div>
                   ))}
+                  <Button 
+                    variant="outline" 
+                    className="w-full mt-4"
+                    onClick={() => navigate('/dashboard/orders')}
+                  >
+                    <Eye className="w-4 h-4 mr-2" />
+                    View All Orders
+                  </Button>
                 </div>
               )}
             </CardContent>
@@ -257,15 +485,15 @@ export default function Dashboard() {
 
           {/* Popular Items */}
           <Card>
-            <CardHeader className="flex-row items-center justify-between">
-              <CardTitle>Top Items</CardTitle>
-              <Button variant="ghost" size="sm">View All</Button>
+            <CardHeader>
+              <CardTitle>Top Items Today</CardTitle>
+              <CardDescription>Most ordered items</CardDescription>
             </CardHeader>
             <CardContent>
               {isLoading ? (
                 <div className="text-center py-8">Loading...</div>
               ) : popularItems.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">No popular items yet</div>
+                <div className="text-center py-8 text-muted-foreground">No orders yet today</div>
               ) : (
                 <div className="space-y-4">
                   {popularItems.map((item, index) => (
@@ -273,16 +501,16 @@ export default function Dashboard() {
                       key={item.name}
                       className="flex items-center justify-between"
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 flex-1">
                         <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
                           {index + 1}
                         </div>
-                        <div>
-                          <p className="font-medium">{item.name}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{item.name}</p>
                           <p className="text-sm text-muted-foreground">{item.orders} orders</p>
                         </div>
                       </div>
-                      <p className="font-bold text-primary">{item.revenue}</p>
+                      <p className="font-bold text-primary whitespace-nowrap ml-2">{item.revenue}</p>
                     </div>
                   ))}
                 </div>
@@ -290,6 +518,94 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Service Requests Section */}
+        {serviceRequests.length > 0 && (
+          <Card className="border-warning/50 bg-warning/5">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Bell className="w-5 h-5 text-warning" />
+                  <CardTitle>Pending Service Requests</CardTitle>
+                </div>
+                <Badge variant="destructive">{serviceRequests.length}</Badge>
+              </div>
+              <CardDescription>Customers waiting for assistance</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {serviceRequests.map((request) => (
+                  <div
+                    key={request.id}
+                    className="flex items-center justify-between p-4 rounded-xl bg-background border border-border hover:border-primary/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="text-2xl">
+                        {getServiceRequestIcon(request.type)}
+                      </div>
+                      <div>
+                        <p className="font-medium">{request.table}</p>
+                        <p className="text-sm text-muted-foreground">{request.time}</p>
+                        <p className="text-xs text-warning">{request.type}</p>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleResolveServiceRequest(request.id)}
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Quick Actions */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Quick Actions</CardTitle>
+            <CardDescription>Common tasks and shortcuts</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Button
+                variant="outline"
+                className="h-24 flex-col gap-2"
+                onClick={() => navigate('/dashboard/orders')}
+              >
+                <ShoppingBag className="w-6 h-6" />
+                <span>View Orders</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-24 flex-col gap-2"
+                onClick={() => navigate('/dashboard/menus')}
+              >
+                <UtensilsCrossed className="w-6 h-6" />
+                <span>Manage Menu</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-24 flex-col gap-2"
+                onClick={() => navigate('/dashboard/tables')}
+              >
+                <Users className="w-6 h-6" />
+                <span>Tables & QR</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-24 flex-col gap-2"
+                onClick={() => navigate('/dashboard/analytics')}
+              >
+                <TrendingUp className="w-6 h-6" />
+                <span>Analytics</span>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </DashboardLayout>
   );

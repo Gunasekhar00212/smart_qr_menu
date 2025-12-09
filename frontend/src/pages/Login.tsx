@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { getApiUrl } from '@/lib/apiClient';
 import { motion } from 'framer-motion';
 import { ChefHat, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -50,7 +51,7 @@ export default function Login() {
     setIsResetting(true);
     
     try {
-      const response = await fetch('http://localhost:5000/api/auth/forgot-password', {
+      const response = await fetch(getApiUrl('/api/auth/forgot-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: resetEmail }),
@@ -114,13 +115,13 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex flex-col lg:flex-row">
       {/* Left Side - Form */}
-      <div className="flex-1 flex items-center justify-center p-8">
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-md"
+          className="w-full max-w-md mx-auto"
         >
           <Link to="/" className="flex items-center gap-2 mb-8">
             <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
@@ -129,8 +130,8 @@ export default function Login() {
             <span className="text-xl font-bold font-display">MenuAI</span>
           </Link>
 
-          <h1 className="text-3xl font-bold font-display mb-2">Welcome back</h1>
-          <p className="text-muted-foreground mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold font-display mb-2">Welcome back</h1>
+          <p className="text-sm sm:text-base text-muted-foreground mb-6 sm:mb-8">
             Sign in to your restaurant dashboard
           </p>
 

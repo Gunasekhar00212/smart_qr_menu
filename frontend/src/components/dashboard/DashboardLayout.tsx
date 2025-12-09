@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -13,11 +13,25 @@ import {
   LogOut,
   Bell,
   Search,
+  Check,
+  Clock,
+  Menu,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
+import { getApiUrl } from '@/lib/apiClient';
 import { cn } from '@/lib/utils';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Badge } from '@/components/ui/badge';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -37,6 +51,71 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const location = useLocation();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    fetchNotifications();
+    // Poll for new notifications every 5 seconds for real-time updates
+    const interval = setInterval(fetchNotifications, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  async function fetchNotifications() {
+    try {
+      const restaurantId = 'fd64a3b7-4c88-4a5d-b53f-a18ef35bcfe4';
+      
+      // Fetch both orders and service requests
+      const [ordersRes, serviceRes] = await Promise.all([
+        fetch(getApiUrl(`/api/orders?restaurantId=${restaurantId}`)),
+        fetch(getApiUrl(`/api/service-requests?restaurantId=${restaurantId}`))
+      ]);
+      
+      const allNotifications = [];
+      
+      // Add order notifications
+      if (ordersRes.ok) {
+        const orders = await ordersRes.json();
+        const orderNotifs = orders
+          .filter((o: any) => o.status === 'PENDING' || o.status === 'CONFIRMED')
+          .slice(0, 3)
+          .map((o: any) => ({
+            id: o.id,
+            type: 'order',
+            message: `New order from Table ${o.tableNumber || 'Unknown'}`,
+            status: o.status,
+            time: new Date(o.createdAt),
+          }));
+        allNotifications.push(...orderNotifs);
+      }
+      
+      // Add service request notifications
+      if (serviceRes.ok) {
+        const serviceRequests = await serviceRes.json();
+        const serviceNotifs = serviceRequests
+          .filter((sr: any) => sr.status === 'PENDING')
+          .slice(0, 5)
+          .map((sr: any) => ({
+            id: sr.id,
+            type: 'service',
+            message: `${sr.requestType === 'WAITER' ? '🙋 Waiter' : sr.requestType === 'WATER' ? '💧 Water' : sr.requestType === 'BILL' ? '💰 Bill' : '📝 Service'} request from Table ${sr.tableNumber || 'Unknown'}`,
+            status: sr.status,
+            requestType: sr.requestType,
+            time: new Date(sr.createdAt),
+          }));
+        allNotifications.push(...serviceNotifs);
+      }
+      
+      // Sort by time, most recent first
+      allNotifications.sort((a, b) => b.time.getTime() - a.time.getTime());
+      
+      setNotifications(allNotifications.slice(0, 8));
+      setUnreadCount(allNotifications.length);
+    } catch (error) {
+      console.error('Failed to fetch notifications:', error);
+    }
+  }
 
   function handleSignOut() {
     try {
@@ -50,8 +129,19 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="min-h-screen bg-background flex">
+      {/* Mobile Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden" 
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 bg-card border-r border-border flex flex-col fixed h-screen">
+      <aside className={cn(
+        "w-64 bg-card border-r border-border flex flex-col fixed h-screen z-50 transition-transform duration-300",
+        isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+      )}>
         {/* Logo */}
         <div className="p-6 border-b border-border">
           <Link to="/dashboard" className="flex items-center gap-2">
@@ -70,8 +160,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               <Link
                 key={item.name}
                 to={item.href}
+                onClick={() => setIsMobileMenuOpen(false)}
                 className={cn(
-                  'flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200',
+                  'flex items-center gap-3 px-4 py-3 rounded-lg transition-colors',
                   isActive
                     ? 'bg-primary text-primary-foreground shadow-md'
                     : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
@@ -109,24 +200,95 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 ml-64">
+      <div className="flex-1 lg:ml-64 w-full">
         {/* Header */}
-        <header className="h-16 border-b border-border bg-card/50 backdrop-blur-sm flex items-center justify-between px-6 sticky top-0 z-40">
-          <div className="relative w-96">
+        <header className="h-16 border-b border-border bg-white flex items-center justify-between px-4 sm:px-6 sticky top-0 z-30">
+          {/* Mobile Menu Button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          >
+            {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </Button>
+
+          <div className="relative w-full max-w-md hidden sm:block">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input
               placeholder="Search orders, items, tables..."
               className="pl-10 bg-secondary/50"
             />
           </div>
+          
+          {/* Mobile: Show only search icon */}
+          <Button variant="ghost" size="icon" className="sm:hidden">
+            <Search className="w-5 h-5" />
+          </Button>
 
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground rounded-full text-xs flex items-center justify-center">
-                3
-              </span>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="relative">
+                  <Bell className="w-5 h-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground rounded-full text-xs flex items-center justify-center">
+                      {unreadCount}
+                    </span>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80">
+                <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {notifications.length === 0 ? (
+                  <div className="p-4 text-center text-muted-foreground text-sm">
+                    No new notifications
+                  </div>
+                ) : (
+                  <>
+                    {notifications.map((notif) => (
+                      <DropdownMenuItem
+                        key={notif.id}
+                        className="flex flex-col items-start gap-1 p-3 cursor-pointer"
+                        onClick={() => {
+                          if (notif.type === 'order') {
+                            navigate('/dashboard/orders');
+                          } else if (notif.type === 'service') {
+                            // Resolve service request
+                            fetch(getApiUrl(`/api/service-requests/${notif.id}/resolve`), {
+                              method: 'PUT'
+                            }).then(() => fetchNotifications());
+                          }
+                        }}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span className="font-medium text-sm">{notif.message}</span>
+                          {notif.type === 'order' && (
+                            <Badge 
+                              variant={notif.status === 'PENDING' ? 'default' : 'secondary'}
+                              className="text-xs"
+                            >
+                              {notif.status}
+                            </Badge>
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {notif.time.toLocaleTimeString()}
+                        </span>
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="justify-center text-primary cursor-pointer"
+                      onClick={() => navigate('/dashboard/orders')}
+                    >
+                      View all orders
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
 
@@ -134,7 +296,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <motion.main
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="p-6"
+          className="p-4 sm:p-6"
         >
           {children}
         </motion.main>

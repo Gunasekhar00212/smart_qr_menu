@@ -38,7 +38,7 @@ export default function Signup() {
   };
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex flex-col-reverse lg:flex-row">
       {/* Left Side - Visual */}
       <div className="hidden lg:flex flex-1 gradient-primary items-center justify-center p-12">
         <motion.div
@@ -73,11 +73,11 @@ export default function Signup() {
       </div>
 
       {/* Right Side - Form */}
-      <div className="flex-1 flex items-center justify-center p-8">
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-md"
+          className="w-full max-w-md mx-auto"
         >
           <Link to="/" className="flex items-center gap-2 mb-8">
             <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
@@ -86,13 +86,13 @@ export default function Signup() {
             <span className="text-xl font-bold font-display">MenuAI</span>
           </Link>
 
-          <h1 className="text-3xl font-bold font-display mb-2">Create your account</h1>
-          <p className="text-muted-foreground mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold font-display mb-2">Create your account</h1>
+          <p className="text-sm sm:text-base text-muted-foreground mb-6 sm:mb-8">
             Get started with MenuAI in minutes
           </p>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="grid grid-cols-2 gap-4">
+          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Your Name</Label>
                 <div className="relative">
